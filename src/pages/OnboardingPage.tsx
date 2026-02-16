@@ -53,7 +53,7 @@ export default function OnboardingPage() {
             // Simulate API delay
             await new Promise(resolve => setTimeout(resolve, 800));
 
-            updateProfile({ name, role });
+            await updateProfile({ name, role });
 
             confetti({
                 particleCount: 100,
