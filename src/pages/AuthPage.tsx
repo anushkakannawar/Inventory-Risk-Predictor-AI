@@ -20,7 +20,7 @@ import {
 
 export default function AuthPage() {
     const navigate = useNavigate();
-    const { login, updateProfile } = useAuth();
+    const { login, signUp, updateProfile } = useAuth();
     const [loading, setLoading] = useState(false);
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -31,11 +31,12 @@ export default function AuthPage() {
         e.preventDefault();
         setLoading(true);
         try {
-            await login(email);
+            await login(email, password);
             toast.success('Welcome back!');
             navigate('/');
         } catch (error: any) {
-            toast.error('Error logging in');
+            console.error(error);
+            toast.error(error.message || 'Error logging in');
         } finally {
             setLoading(false);
         }
@@ -45,15 +46,14 @@ export default function AuthPage() {
         e.preventDefault();
         setLoading(true);
         try {
-            // In local mock mode, sign up is just logging in
-            await login(email);
-            // Save the profile immediately
-            updateProfile({ name: signupName, role: signupRole });
+            // Real Supabase Sign Up
+            await signUp(email, password, signupName, signupRole);
 
             toast.success('Account created! Welcome, ' + signupName);
             navigate('/');
         } catch (error: any) {
-            toast.error('Error creating account');
+            console.error(error);
+            toast.error(error.message || 'Error creating account');
         } finally {
             setLoading(false);
         }

@@ -13,8 +13,9 @@ interface AuthContextType {
     profile: UserProfile | null;
     loading: boolean;
     signOut: () => Promise<void>;
-    login: (email: string) => Promise<void>;
-    updateProfile: (profile: UserProfile) => void;
+    login: (email: string, password?: string) => Promise<void>;
+    signUp: (email: string, password?: string, name?: string, role?: string) => Promise<void>;
+    updateProfile: (profile: UserProfile) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -26,64 +27,75 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        // Check for local "mock" session
-        const storedUser = localStorage.getItem('inventory_user');
-        const storedProfile = localStorage.getItem('inventory_profile');
-
-        if (storedUser) {
-            try {
-                const parsedUser = JSON.parse(storedUser);
-                setUser(parsedUser);
-                setSession({ user: parsedUser } as Session);
-            } catch (e) {
-                console.error('Failed to parse user', e);
+        // Check active session
+        supabase.auth.getSession().then(({ data: { session } }) => {
+            setSession(session);
+            setUser(session?.user ?? null);
+            if (session?.user?.user_metadata) {
+                setProfile(session.user.user_metadata as UserProfile);
             }
-        }
+            setLoading(false);
+        });
 
-        if (storedProfile) {
-            try {
-                setProfile(JSON.parse(storedProfile));
-            } catch (e) {
-                console.error('Failed to parse profile', e);
+        const {
+            data: { subscription },
+        } = supabase.auth.onAuthStateChange((_event, session) => {
+            setSession(session);
+            setUser(session?.user ?? null);
+            if (session?.user?.user_metadata) {
+                setProfile(session.user.user_metadata as UserProfile);
+            } else {
+                setProfile(null);
             }
-        } else {
-            // Default profile if none exists
-            setProfile({ name: 'John Doe', role: 'Inventory Manager' });
-        }
+        });
 
-        setLoading(false);
+        return () => subscription.unsubscribe();
     }, []);
 
-    const login = async (email: string) => {
-        // Mock Login
-        const mockUser: any = {
-            id: 'local-user-' + Math.random().toString(36).substr(2, 9),
-            email: email,
-            aud: 'authenticated',
-            created_at: new Date().toISOString(),
-        };
+    const login = async (email: string, password?: string) => {
+        if (!password) throw new Error('Password is required for real auth');
 
-        const defaultProfile = { name: 'John Doe', role: 'Inventory Manager' };
+        const { error } = await supabase.auth.signInWithPassword({
+            email,
+            password,
+        });
 
-        localStorage.setItem('inventory_user', JSON.stringify(mockUser));
-        localStorage.setItem('inventory_profile', JSON.stringify(defaultProfile));
+        if (error) throw error;
+    };
 
-        setUser(mockUser);
-        setSession({ user: mockUser } as Session);
-        setProfile(defaultProfile);
+    const signUp = async (email: string, password?: string, name?: string, role?: string) => {
+        if (!password) throw new Error('Password is required');
+
+        const { error } = await supabase.auth.signUp({
+            email,
+            password,
+            options: {
+                data: {
+                    name,
+                    role,
+                },
+            },
+        });
+
+        if (error) throw error;
     };
 
     const signOut = async () => {
-        localStorage.removeItem('inventory_user');
-        localStorage.removeItem('inventory_profile');
+        await supabase.auth.signOut();
         setUser(null);
         setSession(null);
         setProfile(null);
     };
 
-    const updateProfile = (newProfile: UserProfile) => {
+    const updateProfile = async (newProfile: UserProfile) => {
+        // For Supabase, we update user metadata
+        const { error } = await supabase.auth.updateUser({
+            data: newProfile
+        });
+
+        if (error) throw error;
+
         setProfile(newProfile);
-        localStorage.setItem('inventory_profile', JSON.stringify(newProfile));
     };
 
     const value = {
@@ -93,6 +105,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         loading,
         signOut,
         login,
+        signUp,
         updateProfile
     };
 
